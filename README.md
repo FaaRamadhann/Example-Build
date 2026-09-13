@@ -1,15 +1,18 @@
 # Example-Build — Contoh Build APK Android Tanpa Android Studio
 
 Build APK Android langsung pakai **JDK + Android SDK build-tools**, tanpa Android Studio / Gradle.
+Pack folder menjadi **zip module Magisk** yang benar (forward-slash + permission unix).
 
-Repo ini berisi 2 script yang fungsinya **sama persis**, tinggal pilih salah satu:
+Repo ini berisi 3 script contoh, tinggal pilih:
 
-| File | Bahasa | Butuh apa | Cocok untuk |
+| File | Fungsi | Butuh apa | Cocok untuk |
 |------|--------|-----------|-------------|
-| `ex-build.bat` | Batch (Windows) | JDK + SDK saja | Pemula, klik-jalan, tanpa install Python |
-| `ex-build.py` | Python 3 | JDK + SDK + Python 3.8+ | Error lebih jelas, bisa passing path project |
+| `ex-build.bat` | Build APK (Batch, Windows) | JDK + SDK saja | Pemula, klik-jalan, tanpa install Python |
+| `ex-build.py` | Build APK (Python) | JDK + SDK + Python 3.8+ | Error lebih jelas, bisa passing path project |
+| `ex-zip.py` | Pack zip Magisk (Python) | Python 3.8+ saja | Lanjutan setelah APK jadi / untuk module Magisk |
 
-Keduanya melakukan 6 tahap yang sama: `javac → d8 → aapt → keystore → zipalign → apksigner`.
+`ex-build.bat` dan `ex-build.py` fungsinya **sama persis** (6 tahap: `javac → d8 → aapt → keystore → zipalign → apksigner`).
+`ex-zip.py` berbasis [`zip.py` FAACC](https://raw.githubusercontent.com/FaaRamadhann/FAACC/refs/heads/main/zip.py) tapi dibuat generik sebagai template.
 
 ---
 
@@ -19,6 +22,7 @@ Keduanya melakukan 6 tahap yang sama: `javac → d8 → aapt → keystore → zi
 .
 ├── ex-build.bat      # versi Batch (Windows)
 ├── ex-build.py       # versi Python (Windows, error lebih jelas)
+├── ex-zip.py         # pack zip Magisk (template dari zip.py FAACC)
 ├── REQUIREMENTS.md   # syarat detail + link download
 └── README.md         # file ini
 ```
@@ -40,7 +44,7 @@ Keduanya melakukan 6 tahap yang sama: `javac → d8 → aapt → keystore → zi
      sdkmanager "platform-tools" "platforms;android-34" "build-tools;35.0.0"
      ```
    - Download `commandlinetools`: https://developer.android.com/studio#command-line-tools-only
-3. **Python 3.8+** — hanya untuk `ex-build.py` (tanpa library tambahan, cuma `os`, `subprocess`, `sys`).
+3. **Python 3.8+** — untuk `ex-build.py` dan `ex-zip.py` (tanpa library tambahan, cuma modul bawaan).
    - Cek: `python --version`
 4. **Windows** — kedua script ditulis untuk Windows (path `.exe` / `.bat`).
 
@@ -156,7 +160,48 @@ Kelebihan versi Python: tiap command di-print (`  $ ...`), dan kalau gagal langs
 
 ---
 
-## 6. Alur Build (6 Tahap, Sama di Kedua Script)
+## 6. Cara Pakai — `ex-zip.py`
+
+Pack folder module (mis. hasil build + `module.prop`) menjadi zip siap flash di Magisk/KernelSU.
+
+1. Copy `ex-zip.py` ke **root module** (sejajar `module.prop`), atau passing path folder.
+2. Sesuaikan blok `KONFIG` di atas file:
+
+   ```python
+   APP_NAME = "contoh"
+   REQUIRED = ["module.prop", "customize.sh", ...]  # wajib ada, kalau hilang -> berhenti
+   EXECUTABLES = {"customize.sh", "service.sh", ...}  # dapat chmod 755 di dalam zip
+   EXCLUDE_DIRS = {"temp", "__pycache__", ".git", "build", ...}
+   ```
+
+3. Jalankan:
+
+   ```bat
+   :: pack folder saat ini -> build\contoh-v<version>.zip (versi dari module.prop)
+   python ex-zip.py
+
+   :: pack folder lain
+   python ex-zip.py D:\path\ke\modul
+
+   :: nama output sendiri
+   python ex-zip.py -o rilis.zip
+
+   :: tanpa versi -> build\contoh.zip
+   python ex-zip.py --no-version
+   ```
+
+4. Hasil: `build\contoh-v1.2.3.zip` (versi dibaca dari `version=` di `module.prop`, fallback `1.0.0`).
+
+Kenapa pakai script ini (bukan klik kanan → Send to ZIP)?
+
+- Entry zip selalu **forward-slash** (`as_posix`), tidak ada backslash Windows yang bikin Magisk gagal baca.
+- Permission unix benar: file di `EXECUTABLES` → `755`, sisanya `644`, folder `755`.
+- File sampah dikecualikan otomatis (`.git/`, `build/`, `__pycache__/`, `*.pyc`, `*.zip`, file script itu sendiri).
+- Ada validasi: script berhenti kalau `REQUIRED` hilang atau ada backslash di entry zip.
+
+---
+
+## 7. Alur Build (6 Tahap, Sama di Kedua Script)
 
 | Tahap | Ngapain | Tool |
 |-------|---------|------|
@@ -181,7 +226,7 @@ build/
 
 ---
 
-## 7. Install ke HP
+## 8. Install ke HP
 
 ```bat
 adb install build\contoh.apk
@@ -191,7 +236,7 @@ adb install -r build\contoh.apk
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Gejala | Penyebab / Solusi |
 |--------|-------------------|
@@ -200,12 +245,13 @@ adb install -r build\contoh.apk
 | `aapt/d8/zipalign/apksigner tidak ditemukan` | Path `BT` / `BUILD_TOOLS` salah atau build-tools belum install via `sdkmanager`. |
 | `Tidak ada file .java di src/` | Struktur folder salah. Pastikan `src\**\*.java` ada, dijalankan dari root project. |
 | `Bukan project Android: ... tidak ada` (versi py) | `python ex-build.py` dijalankan di folder yang salah, atau pakai argumen path: `python ex-build.py D:\path\MyApp`. |
+| `File wajib hilang: ...` (ex-zip.py) | Folder module belum lengkap. Lengkapi `REQUIRED` atau kecilkan daftarnya di `KONFIG`. |
 | APK gagal update di HP (`signatures do not match`) | Ganti keystore. **Backup `debug.keystore`** — update APK wajib pakai key yang sama. |
 | Mau ganti nama/paket | Ubah `APP_NAME`, `PACKAGE` (bat) + `package` di `AndroidManifest.xml`, dan path Java di `src/`. |
 
 ---
 
-## 9. Catatan Penting
+## 10. Catatan Penting
 
 - **Backup `debug.keystore`!** Kalau hilang, kamu tidak bisa update APK di Play Store / HP tanpa uninstall dulu.
 - Untuk rilis Play Store, ganti ke keystore sendiri (bukan `debug.keystore`) dengan password kuat, `validity` panjang, dan simpan di tempat aman.
