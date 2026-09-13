@@ -1,0 +1,12 @@
+# Output build lokal — jangan di-commit, distribusi via GitHub Releases
+build/
+*.zip
+*.apk
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Keystore debug lokal (backup manual, jangan tersebar)
+*.keystore
